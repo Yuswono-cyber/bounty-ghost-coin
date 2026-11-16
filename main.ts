@@ -1,5 +1,5 @@
 // Publish the recorded launch for the grader. No network or wallet access.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const botDir = process.env.MAKEFUN_BOT_DIR ?? '/bot';
@@ -39,6 +39,16 @@ try {
   if (!launch || typeof launch !== 'object' || Array.isArray(launch)) {
     throw new Error('LAUNCH.json must contain an object');
   }
+  for (const field of ['mint', 'create_signature']) {
+    if (typeof launch[field] !== 'string' || launch[field].length === 0) {
+      throw new Error(`LAUNCH.json has an invalid ${field}: must be a non-empty string`);
+    }
+  }
+  for (const field of Object.keys(launch)) {
+    if (field !== 'mint' && field !== 'create_signature') {
+      throw new Error(`LAUNCH.json has an unexpected field: ${field}`);
+    }
+  }
   for (const [field, min, max, byteLength] of [
     ['mint', 32, 44, 32],
     ['create_signature', 64, 88, 64],
@@ -53,7 +63,10 @@ try {
     }
   }
   mkdirSync(outputDir, { recursive: true });
-  writeFileSync(join(outputDir, 'LAUNCH.json'), source);
+  const out = join(outputDir, 'LAUNCH.json');
+  const temporary = join(outputDir, `LAUNCH.json.${process.pid}.tmp`);
+  writeFileSync(temporary, source, { flag: 'wx' });
+  renameSync(temporary, out);
 } catch (error) {
   console.error(`Launch export failed: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
